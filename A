@@ -1,0 +1,132 @@
+        workspace.Terrain.WaterReflectance = 0
+        workspace.Terrain.WaterTransparency = 1
+
+        -- Minimiza efectos de UI que consumen recursos (si tienes muchos GUIs)
+        for _, gui in ipairs(game.CoreGui:GetDescendants()) do
+            if gui:IsA("ImageLabel") or gui:IsA("ImageButton") then
+                gui.ImageTransparency = 0.2
+            end
+        end
+
+        Rayfield:Notify({
+            Title = "Ping Optimizado",
+            Content = "Reducción de uso de red aplicada. Puede ayudar en PvP.",
+            Duration = 5
+        })
+    end
+})
+
+OptimTab:CreateButton({
+    Name = "Skybox PvP (estilo brillante)",
+    Callback = function()
+        local Lighting = game:GetService("Lighting")
+        for _, v in ipairs(Lighting:GetChildren()) do
+            if v:IsA("Sky") then v:Destroy() end
+        end
+
+        local sky = Instance.new("Sky", Lighting)
+        sky.SkyboxBk = "rbxassetid://159454299" -- Puedes cambiar los ID por otros más PvP
+        sky.SkyboxDn = "rbxassetid://159454296"
+        sky.SkyboxFt = "rbxassetid://159454293"
+        sky.SkyboxLf = "rbxassetid://159454286"
+        sky.SkyboxRt = "rbxassetid://159454300"
+        sky.SkyboxUp = "rbxassetid://159454288"
+        sky.StarCount = 3000
+        sky.SunAngularSize = 0
+        sky.MoonAngularSize = 11
+        Lighting.TimeOfDay = "18:00:00"
+    end
+})
+
+-- Highlight
+local function ApplyHighlight(player)
+	if not player.Character then return end
+	local existing = player.Character:FindFirstChild("ESPHighlight")
+	if existing then existing:Destroy() end
+
+	local highlight = Instance.new("Highlight")
+	highlight.Name = "ESPHighlight"
+	highlight.FillTransparency = 1
+	highlight.OutlineTransparency = 0
+	highlight.OutlineColor = HighlightColor
+	highlight.FillColor = HighlightColor
+	highlight.Enabled = ESPEnabled and (not ESPTeamCheck or player.Team ~= LocalPlayer.Team)
+	highlight.Parent = player.Character
+end
+
+local function SetupCharacterHighlight(player)
+	if player ~= LocalPlayer then
+		player.CharacterAdded:Connect(function()
+			repeat task.wait() until player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+			ApplyHighlight(player)
+		end)
+	end
+end
+
+for _, player in ipairs(Players:GetPlayers()) do
+	SetupCharacterHighlight(player)
+	if player.Character then
+		ApplyHighlight(player)
+	end
+end
+
+Players.PlayerAdded:Connect(function(player)
+	SetupCharacterHighlight(player)
+end)
+
+-- Aimbot
+local function GetClosestTarget()
+	local closest = nil
+	local shortestDist = FOVRadius
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+			if TeamCheck and player.Team == LocalPlayer.Team then continue end
+
+			local pos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
+			if onScreen then
+				local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+				local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+
+				if dist <= shortestDist then
+					if WallCheck then
+						local origin = Camera.CFrame.Position
+						local direction = (player.Character.HumanoidRootPart.Position - origin).Unit * 1000
+						local raycastParams = RaycastParams.new()
+						raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
+						raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+
+						local result = workspace:Raycast(origin, direction, raycastParams)
+						if result and result.Instance:IsDescendantOf(player.Character) then
+							closest = player
+							shortestDist = dist
+						end
+					else
+						closest = player
+						shortestDist = dist
+					end
+				end
+			end
+		end
+	end
+
+	return closest
+end
+
+RunService.RenderStepped:Connect(function()
+	if FOVRainbow then
+		local hue = tick() % 5 / 5
+		local color = Color3.fromHSV(hue, 1, 1)
+		UIStroke.Color = color
+	end
+
+	if AimbotEnabled then
+		local target = GetClosestTarget()
+		if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+			local head = target.Character.HumanoidRootPart.Position
+			local camPos = Camera.CFrame.Position
+			local newCF = CFrame.new(camPos, head)
+			Camera.CFrame = Camera.CFrame:Lerp(newCF, 0.4)
+		end
+	end
+end)
